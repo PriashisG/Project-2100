@@ -4,12 +4,15 @@ publish_to: 'none'
 version: 0.1.0
 
 environment:
-  sdk: ^3.10.8
+  sdk: ^3.6.0
 
 dependencies:
   flutter:
     sdk: flutter
-  supabase_flutter: ^2.3.0    # ← add this line
+  supabase_flutter: ^2.3.0
+  flutter_local_notifications: ^17.0.0
+  timezone: ^0.9.4
+  flutter_timezone: ^2.0.0
 
 dev_dependencies:
   flutter_test:
@@ -19,4 +22,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/starting_page_image.png  # ← add this
+    - assets/images/starting_page_image.png

@@ -5,6 +5,7 @@ import 'home_page.dart';
 
 // ─────────────────────────────────────────────
 //  LOGIN PAGE  (Supabase Auth)
+//  Supports both Email and Username login
 // ─────────────────────────────────────────────
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,41 +15,61 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _emailOrUsernameController = TextEditingController();
+  final TextEditingController _passwordController        = TextEditingController();
 
   bool _obscurePassword = true;
-  bool _isLoading = false;
+  bool _isLoading       = false;
   String? _errorMessage;
 
-  // ── Supabase client ───────────────────────────
   final _supabase = Supabase.instance.client;
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _emailOrUsernameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  // ── LOGIN WITH SUPABASE ───────────────────────
-  // ── LOGIN WITH SUPABASE ───────────────────────
+  // ── LOGIN WITH EMAIL OR USERNAME ──────────────
   Future<void> _onLoginPressed() async {
-    final email = _emailController.text.trim();
+    final input    = _emailOrUsernameController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
+    if (input.isEmpty || password.isEmpty) {
       setState(() => _errorMessage = 'Please fill in all fields');
       return;
     }
 
     setState(() {
-      _isLoading = true;
+      _isLoading    = true;
       _errorMessage = null;
     });
 
     try {
-      await _supabase.auth.signInWithPassword(email: email, password: password);
+      String email = input;
+
+      // ── If input is NOT an email, look up email by username ──
+      if (!input.contains('@')) {
+        final result = await _supabase
+            .from('profiles')
+            .select('email')
+            .eq('username', input)
+            .maybeSingle();
+
+        if (result == null) {
+          setState(() => _errorMessage = 'Username not found');
+          return;
+        }
+
+        email = result['email'] as String;
+      }
+
+      // ── Sign in with email + password ─────────
+      await _supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
 
       if (mounted) {
         Navigator.pushReplacement(
@@ -58,6 +79,8 @@ class _LoginPageState extends State<LoginPage> {
       }
     } on AuthException catch (e) {
       setState(() => _errorMessage = e.message);
+    } on PostgrestException catch (e) {
+      setState(() => _errorMessage = 'DB Error: ${e.message}');
     } catch (e) {
       setState(() => _errorMessage = 'Something went wrong. Try again.');
     } finally {
@@ -65,14 +88,32 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // ── FORGOT PASSWORD WITH SUPABASE ─────────────
+  // ── FORGOT PASSWORD ───────────────────────────
   Future<void> _onForgotPassword() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      setState(() => _errorMessage = 'Enter your email first');
+    final input = _emailOrUsernameController.text.trim();
+    if (input.isEmpty) {
+      setState(() => _errorMessage = 'Enter your email or username first');
       return;
     }
+
     try {
+      String email = input;
+
+      // resolve username to email if needed
+      if (!input.contains('@')) {
+        final result = await _supabase
+            .from('profiles')
+            .select('email')
+            .eq('username', input)
+            .maybeSingle();
+
+        if (result == null) {
+          setState(() => _errorMessage = 'Username not found');
+          return;
+        }
+        email = result['email'] as String;
+      }
+
       await _supabase.auth.resetPasswordForEmail(email);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -102,15 +143,13 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+
               // ── BACK BUTTON ───────────────────────────
               const SizedBox(height: 20),
               GestureDetector(
                 onTap: () => Navigator.pop(context),
-                child: const Icon(
-                  Icons.arrow_back,
-                  color: Colors.black,
-                  size: 22,
-                ),
+                child: const Icon(Icons.arrow_back,
+                    color: Colors.black, size: 22),
               ),
 
               const SizedBox(height: 48),
@@ -151,19 +190,14 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.error_outline,
-                        color: Colors.redAccent,
-                        size: 16,
-                      ),
+                      const Icon(Icons.error_outline,
+                          color: Colors.redAccent, size: 16),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           _errorMessage!,
                           style: const TextStyle(
-                            color: Colors.redAccent,
-                            fontSize: 12,
-                          ),
+                              color: Colors.redAccent, fontSize: 12),
                         ),
                       ),
                     ],
@@ -172,14 +206,16 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 20),
               ],
 
-              // ── EMAIL FIELD ───────────────────────────
-              _fieldLabel('EMAIL'),
+              // ── EMAIL OR USERNAME FIELD ───────────────
+              _fieldLabel('EMAIL OR USERNAME'),
               const SizedBox(height: 8),
               TextField(
-                controller: _emailController,
+                controller: _emailOrUsernameController,
                 keyboardType: TextInputType.emailAddress,
                 style: const TextStyle(fontSize: 15, color: Colors.black),
-                decoration: _inputDecoration('you@example.com'),
+                decoration: _inputDecoration(
+                  'you@example.com or @username', // 📌 EDIT hint
+                ),
               ),
 
               const SizedBox(height: 24),
@@ -193,8 +229,8 @@ class _LoginPageState extends State<LoginPage> {
                 style: const TextStyle(fontSize: 15, color: Colors.black),
                 decoration: _inputDecoration('••••••••').copyWith(
                   suffixIcon: GestureDetector(
-                    onTap: () =>
-                        setState(() => _obscurePassword = !_obscurePassword),
+                    onTap: () => setState(
+                        () => _obscurePassword = !_obscurePassword),
                     child: Icon(
                       _obscurePassword
                           ? Icons.visibility_off_outlined
@@ -236,8 +272,7 @@ class _LoginPageState extends State<LoginPage> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                        borderRadius: BorderRadius.circular(8)),
                     elevation: 0,
                   ),
                   child: _isLoading
@@ -266,18 +301,17 @@ class _LoginPageState extends State<LoginPage> {
               Row(
                 children: [
                   Expanded(
-                    child: Divider(color: Colors.black.withOpacity(0.15)),
-                  ),
+                      child: Divider(
+                          color: Colors.black.withOpacity(0.15))),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      'or',
-                      style: TextStyle(color: Colors.black38, fontSize: 12),
-                    ),
+                    child: Text('or',
+                        style: TextStyle(
+                            color: Colors.black38, fontSize: 12)),
                   ),
                   Expanded(
-                    child: Divider(color: Colors.black.withOpacity(0.15)),
-                  ),
+                      child: Divider(
+                          color: Colors.black.withOpacity(0.15))),
                 ],
               ),
 
@@ -293,8 +327,7 @@ class _LoginPageState extends State<LoginPage> {
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     side: const BorderSide(color: Colors.black, width: 1.2),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                   child: const Text(
                     'SIGN UP',
@@ -317,28 +350,29 @@ class _LoginPageState extends State<LoginPage> {
 
   // ── HELPERS ───────────────────────────────────
   Widget _fieldLabel(String label) => Text(
-    label,
-    style: const TextStyle(
-      fontSize: 10,
-      letterSpacing: 2.5,
-      fontWeight: FontWeight.w600,
-      color: Colors.black54,
-    ),
-  );
+        label,
+        style: const TextStyle(
+          fontSize: 10,
+          letterSpacing: 2.5,
+          fontWeight: FontWeight.w600,
+          color: Colors.black54,
+        ),
+      );
 
   InputDecoration _inputDecoration(String hint) => InputDecoration(
-    hintText: hint,
-    hintStyle: const TextStyle(color: Colors.black26),
-    filled: true,
-    fillColor: Colors.white,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide.none,
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: Colors.black, width: 1.2),
-    ),
-  );
+        hintText: hint,
+        hintStyle: const TextStyle(color: Colors.black26),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Colors.black, width: 1.2),
+        ),
+      );
 }

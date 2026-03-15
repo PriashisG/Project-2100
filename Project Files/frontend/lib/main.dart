@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'login_page.dart';
+import 'contest_reminder.dart';
 
 // ─────────────────────────────────────────────
 //  ENTRY POINT
@@ -8,16 +9,22 @@ import 'login_page.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 📌 SUPABASE INIT — paste your keys here
+  // 📌 SUPABASE INIT
   await Supabase.initialize(
-    url: 'https://ctsafjnagyjhprjtqchq.supabase.co', // ← your Project URL
+    url: 'https://ctsafjnagyjhprjtqchq.supabase.co',
     anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0c2Fmam5hZ3lqaHByanRxY2hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MDgxNjQsImV4cCI6MjA4OTA4NDE2NH0.L-keAhtKpM9OAzLrcgSoi3S69W09RNwrB3sGtX2GO5c', // ← paste the eyJ... key
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0c2Fmam5hZ3lqaHByanRxY2hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MDgxNjQsImV4cCI6MjA4OTA4NDE2NH0.L-keAhtKpM9OAzLrcgSoi3S69W09RNwrB3sGtX2GO5c',
   );
+
+  // 📌 NOTIFICATION INIT — static call (no brackets)
+  await NotificationService.init();
 
   runApp(const RealEstateApp());
 }
 
+// ─────────────────────────────────────────────
+//  APP
+// ─────────────────────────────────────────────
 class RealEstateApp extends StatelessWidget {
   const RealEstateApp({super.key});
 
@@ -36,7 +43,7 @@ class RealEstateApp extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-//  MAIN PAGE
+//  MAIN / STARTING PAGE
 // ─────────────────────────────────────────────
 class RealEstateMainPage extends StatelessWidget {
   const RealEstateMainPage({super.key});
@@ -51,19 +58,12 @@ class RealEstateMainPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── TOP SPACER ──────────────────────────────
               const SizedBox(height: 60),
 
-              // ── ILLUSTRATION ────────────────────────────
-              // 📌 REPLACE: swap with your own image
-              //    Image.asset(
-              //      'assets/images/your_image.png',
-              //      height: 220,
-              //      fit: BoxFit.contain,
-              //    )
+              // ── ILLUSTRATION ──────────────────────────
               Center(
                 child: Image.asset(
-                  'assets/images/starting_page_image.png', // ← your image path here
+                  'assets/images/starting_page_image.png',
                   height: 220,
                   fit: BoxFit.contain,
                 ),
@@ -71,10 +71,10 @@ class RealEstateMainPage extends StatelessWidget {
 
               const SizedBox(height: 40),
 
-              // ── EYEBROW LABEL ────────────────────────────
-              // 📌 EDIT TEXT: Change label below
+              // ── EYEBROW LABEL ─────────────────────────
+              // 📌 EDIT text here
               const Text(
-                'LEVEL UP EVERY DAY', // ← your label text
+                'LEVEL UP EVERY DAY',
                 style: TextStyle(
                   fontSize: 11,
                   fontFamily: 'Helvetica Neue',
@@ -86,10 +86,10 @@ class RealEstateMainPage extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // ── MAIN HEADING ─────────────────────────────
-              // 📌 EDIT TEXT: Change heading below
+              // ── MAIN HEADING ──────────────────────────
+              // 📌 EDIT text here
               const Text(
-                'Code.\nCompete.\nConquer.', // ← your heading text
+                'Code.\nCompete.\nConquer.',
                 style: TextStyle(
                   fontSize: 40,
                   fontFamily: 'Georgia',
@@ -102,8 +102,7 @@ class RealEstateMainPage extends StatelessWidget {
 
               const SizedBox(height: 36),
 
-              // ── CTA BUTTON ───────────────────────────────
-              // Navigates to LoginPage
+              // ── GET STARTED BUTTON ────────────────────
               GestureDetector(
                 onTap: () {
                   Navigator.push(
@@ -115,7 +114,7 @@ class RealEstateMainPage extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'GET STARTED', // ← your CTA label
+                      'GET STARTED',
                       style: TextStyle(
                         fontSize: 13,
                         fontFamily: 'Helvetica Neue',
