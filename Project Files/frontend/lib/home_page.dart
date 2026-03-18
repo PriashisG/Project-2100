@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'profile.dart';
 import 'contest_reminder.dart';
+
+// ─────────────────────────────────────────────
+//  📌 YOUR BACKEND URL — change after deploying
+// ─────────────────────────────────────────────
+const String _backendUrl = 'http://localhost:8000'; // ← change to Render URL after deploy
 
 // ─────────────────────────────────────────────
 //  HOME PAGE  (with Bottom Navigation Bar)
@@ -45,10 +52,10 @@ class _HomePageState extends State<HomePage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _navItem(index: 0, icon: Icons.home_outlined,           activeIcon: Icons.home_rounded,           label: 'Home'),
-                _navItem(index: 1, icon: Icons.bar_chart_outlined,      activeIcon: Icons.bar_chart_rounded,      label: 'Analytics'),
-                _navItem(index: 2, icon: Icons.notifications_outlined,  activeIcon: Icons.notifications_rounded,  label: 'Reminders'),
-                _navItem(index: 3, icon: Icons.person_outline_rounded,  activeIcon: Icons.person_rounded,         label: 'Profile'),
+                _navItem(index: 0, icon: Icons.home_outlined,          activeIcon: Icons.home_rounded,          label: 'Home'),
+                _navItem(index: 1, icon: Icons.bar_chart_outlined,     activeIcon: Icons.bar_chart_rounded,     label: 'Analytics'),
+                _navItem(index: 2, icon: Icons.notifications_outlined, activeIcon: Icons.notifications_rounded, label: 'Reminders'),
+                _navItem(index: 3, icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded,        label: 'Profile'),
               ],
             ),
           ),
@@ -108,42 +115,23 @@ class _HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<_HomeTab> {
   final _supabase = Supabase.instance.client;
+
   String _name      = '';
   String _username  = '';
   bool   _isLoading = true;
 
-  // ── UPCOMING CONTESTS PREVIEW ─────────────────
-  // 📌 REPLACE with real API data later
-  final List<Map<String, dynamic>> _upcomingContests = [
-    {
-      'name':     'Codeforces Round 987',
-      'platform': 'CF',
-      'color':    const Color(0xFF1A73E8),
-      'timeLeft': 'In 26h',
-      'urgency':  Colors.green,
-    },
-    {
-      'name':     'CodeChef Starters 123',
-      'platform': 'CC',
-      'color':    const Color(0xFF5B4638),
-      'timeLeft': 'In 5h',
-      'urgency':  Colors.orange,
-    },
-    {
-      'name':     'AtCoder ABC 390',
-      'platform': 'AT',
-      'color':    const Color(0xFF222222),
-      'timeLeft': 'In 3d',
-      'urgency':  Colors.green,
-    },
-  ];
+  // ── CONTESTS FROM BACKEND ─────────────────────
+  List<Map<String, dynamic>> _contests = [];
+  bool _contestsLoading = true;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadContests();
   }
 
+  // ── LOAD PROFILE ──────────────────────────────
   Future<void> _loadProfile() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -163,306 +151,537 @@ class _HomeTabState extends State<_HomeTab> {
     }
   }
 
+  // ── LOAD CONTESTS FROM BACKEND ────────────────
+  Future<void> _loadContests() async {
+    try {
+      final res = await http.get(Uri.parse('$_backendUrl/contests'));
+      if (res.statusCode == 200) {
+        final data   = jsonDecode(res.body);
+        final all    = List<Map<String, dynamic>>.from(data['contests'] ?? []);
+        final now    = DateTime.now().toUtc();
+
+        // ── AUTO REMOVE past contests ─────────────
+        final upcoming = all.where((c) {
+          final start = DateTime.tryParse(c['start_time'] ?? '');
+          return start != null && start.isAfter(now);
+        }).toList();
+
+        // Sort by start time
+        upcoming.sort((a, b) {
+          final aTime = DateTime.parse(a['start_time']);
+          final bTime = DateTime.parse(b['start_time']);
+          return aTime.compareTo(bTime);
+        });
+
+        setState(() {
+          _contests        = upcoming.take(5).toList(); // show max 5 in preview
+          _contestsLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() => _contestsLoading = false);
+    }
+  }
+
+  // ── MARK CONTEST AS COMPLETED ─────────────────
+  Future<void> _markCompleted(Map<String, dynamic> contest) async {
+    setState(() {
+      _contests.removeWhere((c) => c['id'] == contest['id']);
+    });
+
+    // show undo snackbar
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${contest['name']} marked as completed',
+            style: const TextStyle(fontSize: 12),
+          ),
+          backgroundColor: Colors.black,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8)),
+          action: SnackBarAction(
+            label: 'UNDO',
+            textColor: Colors.white70,
+            onPressed: () {
+              setState(() => _contests.insert(0, contest));
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  // ── PLATFORM CONFIG ───────────────────────────
+  Color _platformColor(String platform) {
+    switch (platform.toLowerCase()) {
+      case 'codeforces': return const Color(0xFF1A73E8);
+      case 'codechef':   return const Color(0xFF5B4638);
+      case 'atcoder':    return const Color(0xFF222222);
+      default:           return Colors.black54;
+    }
+  }
+
+  String _platformBadge(String platform) {
+    switch (platform.toLowerCase()) {
+      case 'codeforces': return 'CF';
+      case 'codechef':   return 'CC';
+      case 'atcoder':    return 'AT';
+      default:           return 'OT';
+    }
+  }
+
+  // ── TIME UNTIL CONTEST ────────────────────────
+  String _timeUntil(String startTimeStr) {
+    final start = DateTime.tryParse(startTimeStr)?.toLocal();
+    if (start == null) return '';
+    final diff = start.difference(DateTime.now());
+    if (diff.inDays > 0)    return 'In ${diff.inDays}d ${diff.inHours % 24}h';
+    if (diff.inHours > 0)   return 'In ${diff.inHours}h ${diff.inMinutes % 60}m';
+    if (diff.inMinutes > 0) return 'In ${diff.inMinutes}m';
+    return 'Starting!';
+  }
+
+  Color _urgencyColor(String startTimeStr) {
+    final start = DateTime.tryParse(startTimeStr)?.toLocal();
+    if (start == null) return Colors.green;
+    final diff = start.difference(DateTime.now());
+    if (diff.inHours < 1)  return Colors.redAccent;
+    if (diff.inHours < 24) return Colors.orange;
+    return Colors.green;
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Colors.black))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 32.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+          : RefreshIndicator(
+              color: Colors.black,
+              onRefresh: () async {
+                await _loadContests();
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
 
-                  const SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
-                  // ── TOP BAR ─────────────────────────────
-                  const Text(
-                    'CP TRACKER',
-                    style: TextStyle(
-                      fontSize: 11,
-                      letterSpacing: 3.5,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black,
-                    ),
-                  ),
-
-                  const SizedBox(height: 60),
-
-                  // ── WELCOME ──────────────────────────────
-                  const Text(
-                    'WELCOME',
-                    style: TextStyle(
+                    // ── TOP BAR ─────────────────────────────
+                    const Text(
+                      'CP TRACKER',
+                      style: TextStyle(
                         fontSize: 11,
-                        letterSpacing: 3.0,
-                        color: Colors.black45),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Hello,\n$_name',
-                    style: const TextStyle(
-                      fontSize: 38,
-                      fontFamily: 'Georgia',
-                      fontWeight: FontWeight.w400,
-                      height: 1.2,
-                      color: Colors.black,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text('@$_username',
-                      style: const TextStyle(
-                          fontSize: 14, color: Colors.black45)),
-
-                  const SizedBox(height: 48),
-                  Divider(color: Colors.black.withOpacity(0.1)),
-                  const SizedBox(height: 32),
-
-                  // ════════════════════════════════════════
-                  //  UPCOMING CONTESTS PREVIEW
-                  // ════════════════════════════════════════
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'UPCOMING CONTESTS',
-                        style: TextStyle(
-                          fontSize: 10,
-                          letterSpacing: 3.0,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black,
-                        ),
+                        letterSpacing: 3.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
                       ),
-                      GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const ContestReminderPage()),
-                        ),
-                        child: const Text(
-                          'SEE ALL →',
+                    ),
+
+                    const SizedBox(height: 60),
+
+                    // ── WELCOME ──────────────────────────────
+                    const Text(
+                      'WELCOME',
+                      style: TextStyle(
+                          fontSize: 11,
+                          letterSpacing: 3.0,
+                          color: Colors.black45),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Hello,\n$_name',
+                      style: const TextStyle(
+                        fontSize: 38,
+                        fontFamily: 'Georgia',
+                        fontWeight: FontWeight.w400,
+                        height: 1.2,
+                        color: Colors.black,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('@$_username',
+                        style: const TextStyle(
+                            fontSize: 14, color: Colors.black45)),
+
+                    const SizedBox(height: 48),
+                    Divider(color: Colors.black.withOpacity(0.1)),
+                    const SizedBox(height: 32),
+
+                    // ════════════════════════════════════════
+                    //  UPCOMING CONTESTS SECTION
+                    // ════════════════════════════════════════
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'UPCOMING CONTESTS',
                           style: TextStyle(
                             fontSize: 10,
-                            letterSpacing: 1.5,
+                            letterSpacing: 3.0,
                             fontWeight: FontWeight.w700,
-                            color: Colors.black54,
-                            decoration: TextDecoration.underline,
+                            color: Colors.black,
                           ),
                         ),
+                        Row(
+                          children: [
+                            // Refresh button
+                            GestureDetector(
+                              onTap: _loadContests,
+                              child: const Icon(Icons.refresh,
+                                  size: 16, color: Colors.black45),
+                            ),
+                            const SizedBox(width: 12),
+                            GestureDetector(
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        const ContestReminderPage()),
+                              ),
+                              child: const Text(
+                                'SEE ALL →',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  letterSpacing: 1.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black54,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // ── CONTESTS LIST ─────────────────────────
+                    _contestsLoading
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: CircularProgressIndicator(
+                                  color: Colors.black, strokeWidth: 2),
+                            ),
+                          )
+                        : _contests.isEmpty
+                            ? Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(28),
+                                decoration: BoxDecoration(
+                                  color: Colors.black,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.notifications_none,
+                                        size: 40, color: Colors.white38),
+                                    SizedBox(height: 14),
+                                    Text(
+                                      'No upcoming contests',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontFamily: 'Georgia',
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    SizedBox(height: 6),
+                                    Text(
+                                      'Pull down to refresh',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.white38,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : Column(
+                                children: _contests
+                                    .map((c) => Padding(
+                                          padding: const EdgeInsets.only(
+                                              bottom: 12),
+                                          child: _contestCard(c),
+                                        ))
+                                    .toList(),
+                              ),
+
+                    const SizedBox(height: 14),
+
+                    // ── MANAGE REMINDERS BUTTON ───────────────
+                    GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const ContestReminderPage()),
                       ),
-                    ],
-                  ),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                              color: Colors.black, width: 1.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.notifications_outlined,
+                                size: 14, color: Colors.black),
+                            SizedBox(width: 8),
+                            Text(
+                              'MANAGE REMINDERS',
+                              style: TextStyle(
+                                fontSize: 11,
+                                letterSpacing: 2.0,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
 
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 40),
+                    Divider(color: Colors.black.withOpacity(0.1)),
+                    const SizedBox(height: 32),
 
-                  // ── CONTEST PREVIEW CARDS or EMPTY STATE ─
-                  if (_upcomingContests.isEmpty)
-                    // ── BLACK EMPTY STATE BOX ───────────────
+                    // ── PLATFORM CARDS ───────────────────────
+                    const Text(
+                      'YOUR PLATFORMS',
+                      style: TextStyle(
+                        fontSize: 10,
+                        letterSpacing: 3.0,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _platformCard('CODEFORCES', 'CF',
+                        const Color(0xFF1A73E8),
+                        'Track your CF rating & problems'),
+                    const SizedBox(height: 14),
+                    _platformCard('CODECHEF', 'CC',
+                        const Color(0xFF5B4638),
+                        'Track your CC rating & contests'),
+                    const SizedBox(height: 14),
+                    _platformCard('ATCODER', 'AT',
+                        const Color(0xFF222222),
+                        'Track your AT rating & problems'),
+
+                    const SizedBox(height: 48),
+
+                    // ── MOTIVATIONAL CARD ────────────────────
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(28),
+                      padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
                         color: Colors.black,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Column(
-                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.notifications_none,
-                              size: 40, color: Colors.white38),
-                          SizedBox(height: 14),
                           Text(
-                            'No upcoming contests',
+                            'Code.\nCompete.\nConquer.',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 28,
                               fontFamily: 'Georgia',
+                              height: 1.3,
                               color: Colors.white,
                             ),
                           ),
-                          SizedBox(height: 6),
+                          SizedBox(height: 12),
                           Text(
-                            'Add reminders from the Reminders tab',
+                            'LEVEL UP EVERY DAY',
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 10,
+                              letterSpacing: 3.0,
                               color: Colors.white38,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    // ── CONTEST CARDS ─────────────────────────
-                    Column(
-                      children: _upcomingContests
-                          .map((c) => Padding(
-                                padding:
-                                    const EdgeInsets.only(bottom: 10),
-                                child: _contestPreviewCard(c),
-                              ))
-                          .toList(),
-                    ),
-
-                  const SizedBox(height: 14),
-
-                  // ── MANAGE REMINDERS BUTTON ───────────────
-                  GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const ContestReminderPage()),
-                    ),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        border:
-                            Border.all(color: Colors.black, width: 1.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.notifications_outlined,
-                              size: 14, color: Colors.black),
-                          SizedBox(width: 8),
-                          Text(
-                            'MANAGE REMINDERS',
-                            style: TextStyle(
-                              fontSize: 11,
-                              letterSpacing: 2.0,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 40),
-                  Divider(color: Colors.black.withOpacity(0.1)),
-                  const SizedBox(height: 32),
-
-                  // ── PLATFORM CARDS ───────────────────────
-                  const Text(
-                    'YOUR PLATFORMS',
-                    style: TextStyle(
-                      fontSize: 10,
-                      letterSpacing: 3.0,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _platformCard('CODEFORCES', 'CF',
-                      const Color(0xFF1A73E8),
-                      'Track your CF rating & problems'),
-                  const SizedBox(height: 14),
-                  _platformCard('CODECHEF', 'CC',
-                      const Color(0xFF5B4638),
-                      'Track your CC rating & contests'),
-                  const SizedBox(height: 14),
-                  _platformCard('ATCODER', 'AT',
-                      const Color(0xFF222222),
-                      'Track your AT rating & problems'),
-
-                  const SizedBox(height: 48),
-
-                  // ── MOTIVATIONAL CARD ────────────────────
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Code.\nCompete.\nConquer.',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontFamily: 'Georgia',
-                            height: 1.3,
-                            color: Colors.white,
-                          ),
-                        ),
-                        SizedBox(height: 12),
-                        Text(
-                          'LEVEL UP EVERY DAY',
-                          style: TextStyle(
-                            fontSize: 10,
-                            letterSpacing: 3.0,
-                            color: Colors.white38,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 48),
-                ],
+                    const SizedBox(height: 48),
+                  ],
+                ),
               ),
             ),
     );
   }
 
-  // ── CONTEST PREVIEW CARD ──────────────────────
-  Widget _contestPreviewCard(Map<String, dynamic> c) {
+  // ── CONTEST CARD WITH COMPLETED BUTTON ────────
+  Widget _contestCard(Map<String, dynamic> c) {
+    final platform  = c['platform'] as String? ?? 'Other';
+    final color     = _platformColor(platform);
+    final badge     = _platformBadge(platform);
+    final timeLeft  = _timeUntil(c['start_time'] ?? '');
+    final urgency   = _urgencyColor(c['start_time'] ?? '');
+    final startTime = DateTime.tryParse(c['start_time'] ?? '')?.toLocal();
+
+    final months = ['Jan','Feb','Mar','Apr','May','Jun',
+                    'Jul','Aug','Sep','Oct','Nov','Dec'];
+    final dateStr = startTime != null
+        ? '${startTime.day} ${months[startTime.month - 1]}'
+        : '';
+
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(10)),
-      child: Row(
-        children: [
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: (c['color'] as Color).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              c['platform'],
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                color: c['color'] as Color,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              c['name'],
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: (c['urgency'] as Color).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              c['timeLeft'],
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: c['urgency'] as Color,
-              ),
-            ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            // ── ROW 1: Platform + date + time left ──
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Platform badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    platform,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
+                ),
+
+                Row(
+                  children: [
+                    // Date
+                    Text(
+                      dateStr,
+                      style: const TextStyle(
+                          fontSize: 11, color: Colors.black38),
+                    ),
+                    const SizedBox(width: 8),
+                    // Time left badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: urgency.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        timeLeft,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: urgency,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 10),
+
+            // ── ROW 2: Contest name ────────────────
+            Text(
+              c['name'] as String? ?? '',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black,
+                height: 1.3,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── ROW 3: Badge + Completed button ───
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Platform badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    badge,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                    ),
+                  ),
+                ),
+
+                // ── COMPLETED BUTTON ──────────────
+                GestureDetector(
+                  onTap: () => _markCompleted(c),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: Colors.green.shade200, width: 1),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle_outline,
+                            size: 13, color: Colors.green.shade600),
+                        const SizedBox(width: 5),
+                        Text(
+                          'COMPLETED',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.0,
+                            color: Colors.green.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -536,8 +755,7 @@ class _AnalyticsTab extends StatelessWidget {
                     color: Colors.black45)),
             SizedBox(height: 8),
             Text('Coming soon',
-                style:
-                    TextStyle(fontSize: 12, color: Colors.black26)),
+                style: TextStyle(fontSize: 12, color: Colors.black26)),
           ],
         ),
       ),

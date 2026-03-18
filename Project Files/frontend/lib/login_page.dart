@@ -214,7 +214,7 @@ class _LoginPageState extends State<LoginPage> {
                 keyboardType: TextInputType.emailAddress,
                 style: const TextStyle(fontSize: 15, color: Colors.black),
                 decoration: _inputDecoration(
-                  'you@example.com or @username', // 📌 EDIT hint
+                  'username / you@example.com', // 📌 EDIT hint
                 ),
               ),
 
