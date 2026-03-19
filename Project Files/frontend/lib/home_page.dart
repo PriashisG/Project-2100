@@ -8,7 +8,7 @@ import 'contest_reminder.dart';
 // ─────────────────────────────────────────────
 //  📌 YOUR BACKEND URL — change after deploying
 // ─────────────────────────────────────────────
-const String _backendUrl = 'http://localhost:8000'; // ← change to Render URL after deploy
+const String _backendUrl = 'https://cp-tracker-backend-b8e0.onrender.com';
 
 // ─────────────────────────────────────────────
 //  HOME PAGE  (with Bottom Navigation Bar)
