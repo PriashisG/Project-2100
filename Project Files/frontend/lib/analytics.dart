@@ -18,11 +18,11 @@ class AnalyticsTab extends StatefulWidget {
 class _AnalyticsTabState extends State<AnalyticsTab> {
   final _supabase = Supabase.instance.client;
 
-  String _cfHandle    = '';
-  bool   _isLoading   = false;
-  bool   _hasData     = false;
-  String _statusMsg   = '';
-  double _progress    = 0.0;
+  String _cfHandle = '';
+  bool _isLoading = false;
+  bool _hasData = false;
+  String _statusMsg = '';
+  double _progress = 0.0;
 
   // ── ANALYSIS RESULTS ─────────────────────────
   Map<String, dynamic> _data = {};
@@ -55,10 +55,10 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     }
 
     setState(() {
-      _isLoading  = true;
-      _hasData    = false;
-      _progress   = 0.05;
-      _statusMsg  = 'Starting analysis...';
+      _isLoading = true;
+      _hasData = false;
+      _progress = 0.05;
+      _statusMsg = 'Starting analysis...';
     });
 
     try {
@@ -66,31 +66,40 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
       // The analysis takes ~30-60s so we show fake progress
       _simulateProgress();
 
-      final res = await http.get(
-        Uri.parse('$_backendUrl/analyze/$_cfHandle'),
-      ).timeout(const Duration(minutes: 3));
+      final res = await http
+          .get(
+            Uri.parse('$_backendUrl/analyze/$_cfHandle'),
+          )
+          .timeout(const Duration(minutes: 3));
 
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         setState(() {
-          _data      = Map<String, dynamic>.from(body['data'] ?? {});
-          _hasData   = true;
+          _data = Map<String, dynamic>.from(body['data'] ?? {});
+          _hasData = true;
           _isLoading = false;
-          _progress  = 1.0;
+          _progress = 1.0;
           _statusMsg = 'Analysis complete ✅';
         });
       } else {
         final err = jsonDecode(res.body)['detail'] ?? 'Analysis failed';
-        setState(() { _isLoading = false; _statusMsg = err; });
+        setState(() {
+          _isLoading = false;
+          _statusMsg = err;
+        });
         _showSnack(err);
       }
     } catch (e) {
-      setState(() { _isLoading = false; _statusMsg = 'Error: ${e.toString()}'; });
+      setState(() {
+        _isLoading = false;
+        _statusMsg = 'Error: ${e.toString()}';
+      });
       _showSnack('Analysis failed. Try again.');
     }
   }
 
   void _simulateProgress() {
+    bool _cancelled = false;
     final steps = [
       [0.10, 'Looking up handle...'],
       [0.20, 'Fetching similar rated users...'],
@@ -100,15 +109,17 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     ];
     int i = 0;
     Future.doWhile(() async {
-      if (!_isLoading || i >= steps.length) return false;
+      if (!mounted || !_isLoading || i >= steps.length) return false;
       await Future.delayed(const Duration(seconds: 8));
       if (!mounted || !_isLoading) return false;
-      setState(() {
-        _progress  = steps[i][0] as double;
-        _statusMsg = steps[i][1] as String;
-      });
+      if (mounted) {
+        setState(() {
+          _progress = steps[i][0] as double;
+          _statusMsg = steps[i][1] as String;
+        });
+      }
       i++;
-      return true;
+      return mounted && _isLoading;
     });
   }
 
@@ -129,13 +140,15 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             const SizedBox(height: 32),
 
             // ── HEADER ────────────────────────────
             const Text('ANALYTICS',
-                style: TextStyle(fontSize: 11, letterSpacing: 3.5,
-                    fontWeight: FontWeight.w700, color: Colors.black)),
+                style: TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 3.5,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black)),
 
             const SizedBox(height: 32),
 
@@ -146,19 +159,24 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                   color: Colors.white, borderRadius: BorderRadius.circular(12)),
               child: Row(children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                       color: const Color(0xFF1A73E8).withOpacity(0.12),
                       borderRadius: BorderRadius.circular(6)),
-                  child: const Text('CF', style: TextStyle(fontSize: 12,
-                      fontWeight: FontWeight.w800, color: Color(0xFF1A73E8))),
+                  child: const Text('CF',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1A73E8))),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     _cfHandle.isEmpty ? 'No CF handle set' : _cfHandle,
                     style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
                       color: _cfHandle.isEmpty ? Colors.black38 : Colors.black,
                     ),
                   ),
@@ -175,16 +193,27 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _isLoading || _cfHandle.isEmpty ? null : _runAnalysis,
+                onPressed:
+                    _isLoading || _cfHandle.isEmpty ? null : _runAnalysis,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black, foregroundColor: Colors.white,
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 18),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                   elevation: 0,
                 ),
                 child: _isLoading
-                    ? const Text('ANALYSING...', style: TextStyle(fontSize: 12, letterSpacing: 2.0, fontWeight: FontWeight.w700))
-                    : const Text('RUN ANALYSIS', style: TextStyle(fontSize: 12, letterSpacing: 2.5, fontWeight: FontWeight.w700)),
+                    ? const Text('ANALYSING...',
+                        style: TextStyle(
+                            fontSize: 12,
+                            letterSpacing: 2.0,
+                            fontWeight: FontWeight.w700))
+                    : const Text('RUN ANALYSIS',
+                        style: TextStyle(
+                            fontSize: 12,
+                            letterSpacing: 2.5,
+                            fontWeight: FontWeight.w700)),
               ),
             ),
 
@@ -194,30 +223,42 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                    color: Colors.white, borderRadius: BorderRadius.circular(10)),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Expanded(child: Text(_statusMsg,
-                        style: const TextStyle(fontSize: 12, color: Colors.black54))),
-                    Text('${(_progress * 100).toInt()}%',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black)),
-                  ]),
-                  const SizedBox(height: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: _progress,
-                      backgroundColor: Colors.black.withOpacity(0.08),
-                      color: Colors.black,
-                      minHeight: 6,
-                    ),
-                  ),
-                  if (_isLoading) ...[
-                    const SizedBox(height: 8),
-                    const Text('⚠️ This takes 30-60 seconds. Please wait...',
-                        style: TextStyle(fontSize: 10, color: Colors.black38)),
-                  ],
-                ]),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10)),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                                child: Text(_statusMsg,
+                                    style: const TextStyle(
+                                        fontSize: 12, color: Colors.black54))),
+                            Text('${(_progress * 100).toInt()}%',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.black)),
+                          ]),
+                      const SizedBox(height: 10),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: _progress,
+                          backgroundColor: Colors.black.withOpacity(0.08),
+                          color: Colors.black,
+                          minHeight: 6,
+                        ),
+                      ),
+                      if (_isLoading) ...[
+                        const SizedBox(height: 8),
+                        const Text(
+                            '⚠️ This takes 30-60 seconds. Please wait...',
+                            style:
+                                TextStyle(fontSize: 10, color: Colors.black38)),
+                      ],
+                    ]),
               ),
             ],
 
@@ -236,26 +277,26 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
 
   // ── BUILD RESULTS ─────────────────────────────
   Widget _buildResults() {
-    final rating    = _data['rating']     as int?    ?? 0;
-    final maxRating = _data['max_rating'] as int?    ?? 0;
-    final rank      = _data['rank']       as String? ?? 'unrated';
-    final strong    = List<String>.from(_data['strong'] ?? []);
-    final mid       = List<String>.from(_data['mid']    ?? []);
-    final weak      = List<String>.from(_data['weak']   ?? []);
-    final total     = Map<String, dynamic>.from(_data['total'] ?? {});
-    final good      = Map<String, dynamic>.from(_data['good']  ?? {});
-    final bad       = Map<String, dynamic>.from(_data['bad']   ?? {});
-    final tagcount  = Map<String, dynamic>.from(_data['tagcount'] ?? {});
+    final rating = _data['rating'] as int? ?? 0;
+    final maxRating = _data['max_rating'] as int? ?? 0;
+    final rank = _data['rank'] as String? ?? 'unrated';
+    final strong = List<String>.from(_data['strong'] ?? []);
+    final mid = List<String>.from(_data['mid'] ?? []);
+    final weak = List<String>.from(_data['weak'] ?? []);
+    final total = Map<String, dynamic>.from(_data['total'] ?? {});
+    final good = Map<String, dynamic>.from(_data['good'] ?? {});
+    final bad = Map<String, dynamic>.from(_data['bad'] ?? {});
+    final tagcount = Map<String, dynamic>.from(_data['tagcount'] ?? {});
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
       // ── RATING CARD ─────────────────────────────
       _sectionLabel('RATING'),
       const SizedBox(height: 12),
       Row(children: [
         Expanded(child: _statCard('Current', '$rating', Colors.black)),
         const SizedBox(width: 12),
-        Expanded(child: _statCard('Peak', '$maxRating', const Color(0xFF1A73E8))),
+        Expanded(
+            child: _statCard('Peak', '$maxRating', const Color(0xFF1A73E8))),
         const SizedBox(width: 12),
         Expanded(child: _statCard('Rank', rank, _rankColor(rating))),
       ]),
@@ -309,11 +350,30 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(children: [
-              const Expanded(flex: 3, child: Text('TAG',
-                  style: TextStyle(fontSize: 9, letterSpacing: 2.0, fontWeight: FontWeight.w700, color: Colors.black45))),
-              const Expanded(child: Text('✅', style: TextStyle(fontSize: 11), textAlign: TextAlign.center)),
-              const Expanded(child: Text('❌', style: TextStyle(fontSize: 11), textAlign: TextAlign.center)),
-              const Expanded(child: Text('%', style: TextStyle(fontSize: 9, letterSpacing: 1.5, fontWeight: FontWeight.w700, color: Colors.black45), textAlign: TextAlign.center)),
+              const Expanded(
+                  flex: 3,
+                  child: Text('TAG',
+                      style: TextStyle(
+                          fontSize: 9,
+                          letterSpacing: 2.0,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black45))),
+              const Expanded(
+                  child: Text('✅',
+                      style: TextStyle(fontSize: 11),
+                      textAlign: TextAlign.center)),
+              const Expanded(
+                  child: Text('❌',
+                      style: TextStyle(fontSize: 11),
+                      textAlign: TextAlign.center)),
+              const Expanded(
+                  child: Text('%',
+                      style: TextStyle(
+                          fontSize: 9,
+                          letterSpacing: 1.5,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black45),
+                      textAlign: TextAlign.center)),
             ]),
           ),
           Divider(height: 1, color: Colors.black.withOpacity(0.06)),
@@ -323,31 +383,50 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             final entries = total.entries.toList();
             entries.sort((a, b) => (b.value as int).compareTo(a.value as int));
             return entries.take(20).map((e) {
-              final tag     = e.key;
-              final tot     = (total[tag] as int?) ?? 0;
-              final g       = (good[tag]  as int?) ?? 0;
-              final b       = (bad[tag]   as int?) ?? 0;
-              final pct     = tot > 0 ? (g / tot * 100).toStringAsFixed(0) : '0';
-              final pctVal  = tot > 0 ? g / tot : 0.0;
-              final barColor = pctVal >= 0.75 ? Colors.green
-                  : pctVal <= 0.6 ? Colors.redAccent : Colors.orange;
+              final tag = e.key;
+              final tot = (total[tag] as int?) ?? 0;
+              final g = (good[tag] as int?) ?? 0;
+              final b = (bad[tag] as int?) ?? 0;
+              final pct = tot > 0 ? (g / tot * 100).toStringAsFixed(0) : '0';
+              final pctVal = tot > 0 ? g / tot : 0.0;
+              final barColor = pctVal >= 0.75
+                  ? Colors.green
+                  : pctVal <= 0.6
+                      ? Colors.redAccent
+                      : Colors.orange;
 
               return Column(children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   child: Row(children: [
-                    Expanded(flex: 3, child: Text(tag,
-                        style: const TextStyle(fontSize: 12, color: Colors.black),
-                        overflow: TextOverflow.ellipsis)),
-                    Expanded(child: Text('$g',
-                        style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600),
-                        textAlign: TextAlign.center)),
-                    Expanded(child: Text('$b',
-                        style: const TextStyle(fontSize: 12, color: Colors.redAccent, fontWeight: FontWeight.w600),
-                        textAlign: TextAlign.center)),
-                    Expanded(child: Text('$pct%',
-                        style: TextStyle(fontSize: 12, color: barColor, fontWeight: FontWeight.w700),
-                        textAlign: TextAlign.center)),
+                    Expanded(
+                        flex: 3,
+                        child: Text(tag,
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.black),
+                            overflow: TextOverflow.ellipsis)),
+                    Expanded(
+                        child: Text('$g',
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.green,
+                                fontWeight: FontWeight.w600),
+                            textAlign: TextAlign.center)),
+                    Expanded(
+                        child: Text('$b',
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.redAccent,
+                                fontWeight: FontWeight.w600),
+                            textAlign: TextAlign.center)),
+                    Expanded(
+                        child: Text('$pct%',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: barColor,
+                                fontWeight: FontWeight.w700),
+                            textAlign: TextAlign.center)),
                   ]),
                 ),
                 // Mini progress bar
@@ -388,24 +467,33 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
 
   // ── HELPERS ───────────────────────────────────
   Widget _sectionLabel(String label) => Text(label,
-      style: const TextStyle(fontSize: 10, letterSpacing: 3.0,
-          fontWeight: FontWeight.w700, color: Colors.black));
+      style: const TextStyle(
+          fontSize: 10,
+          letterSpacing: 3.0,
+          fontWeight: FontWeight.w700,
+          color: Colors.black));
 
   Widget _statCard(String label, String value, Color color) => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
             color: Colors.white, borderRadius: BorderRadius.circular(10)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: const TextStyle(fontSize: 10, color: Colors.black38, letterSpacing: 1.5)),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 10, color: Colors.black38, letterSpacing: 1.5)),
           const SizedBox(height: 6),
-          Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: color),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w700, color: color),
               overflow: TextOverflow.ellipsis),
         ]),
       );
 
-  Widget _tagGrid(List<dynamic> tags, Color color, {Map<String, dynamic>? counts}) {
+  Widget _tagGrid(List<dynamic> tags, Color color,
+      {Map<String, dynamic>? counts}) {
     return Wrap(
-      spacing: 8, runSpacing: 8,
+      spacing: 8,
+      runSpacing: 8,
       children: tags.map((tag) {
         final count = counts != null ? ' (${counts[tag]})' : '';
         return Container(
@@ -416,7 +504,8 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             border: Border.all(color: color.withOpacity(0.3)),
           ),
           child: Text('$tag$count',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+              style: TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w600, color: color)),
         );
       }).toList(),
     );
@@ -427,7 +516,8 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
         decoration: BoxDecoration(
             color: Colors.black.withOpacity(0.05),
             borderRadius: BorderRadius.circular(20)),
-        child: Text(msg, style: const TextStyle(fontSize: 11, color: Colors.black38)),
+        child: Text(msg,
+            style: const TextStyle(fontSize: 11, color: Colors.black38)),
       );
 
   Color _rankColor(int rating) {

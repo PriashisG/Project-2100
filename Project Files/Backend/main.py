@@ -384,3 +384,51 @@ async def fetch_user_stats(user_id: str):
                 results["atcoder"] = {"error": str(e)}
 
     return {"user_id": user_id, "stats": results}
+
+
+# ─────────────────────────────────────────────
+#  ANALYSIS ENDPOINTS
+# ─────────────────────────────────────────────
+from analysis import analyze_handle
+import asyncio
+
+@app.get("/analyze/{handle}")
+async def analyze(handle: str):
+    """
+    Full CF analysis for a handle.
+    Returns strong/mid/weak zones + tag stats.
+    ⚠️ This can take 30-60 seconds — Render free tier may need a wake-up call first.
+    """
+    try:
+        loop   = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, analyze_handle, handle)
+        return {"status": "ok", "data": result}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/analyze/quick/{handle}")
+async def analyze_quick(handle: str):
+    """
+    Quick stats only — rating, rank, max_rating.
+    Fast response, no peer analysis.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.get(
+                f"https://codeforces.com/api/user.info?handles={handle}"
+            )
+            data = res.json()
+            if data["status"] != "OK":
+                raise HTTPException(status_code=404, detail="Handle not found")
+            u = data["result"][0]
+            return {
+                "handle":     handle,
+                "rating":     u.get("rating", 0),
+                "max_rating": u.get("maxRating", 0),
+                "rank":       u.get("rank", "unrated"),
+                "name": f"{u.get('firstName','')} {u.get('lastName','')}".strip() or handle,
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
