@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'profile.dart';
 import 'contest_reminder.dart';
+import 'analytics.dart';
 
 // ─────────────────────────────────────────────
 //  📌 YOUR BACKEND URL — change after deploying
@@ -25,7 +26,7 @@ class _HomePageState extends State<HomePage> {
 
   final List<Widget> _pages = [
     const _HomeTab(),
-    const _AnalyticsTab(),
+    const AnalyticsTab(),
     const ContestReminderPage(),
     const ProfileTab(),
   ];
@@ -52,10 +53,26 @@ class _HomePageState extends State<HomePage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _navItem(index: 0, icon: Icons.home_outlined,          activeIcon: Icons.home_rounded,          label: 'Home'),
-                _navItem(index: 1, icon: Icons.bar_chart_outlined,     activeIcon: Icons.bar_chart_rounded,     label: 'Analytics'),
-                _navItem(index: 2, icon: Icons.notifications_outlined, activeIcon: Icons.notifications_rounded, label: 'Reminders'),
-                _navItem(index: 3, icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded,        label: 'Profile'),
+                _navItem(
+                    index: 0,
+                    icon: Icons.home_outlined,
+                    activeIcon: Icons.home_rounded,
+                    label: 'Home'),
+                _navItem(
+                    index: 1,
+                    icon: Icons.bar_chart_outlined,
+                    activeIcon: Icons.bar_chart_rounded,
+                    label: 'Analytics'),
+                _navItem(
+                    index: 2,
+                    icon: Icons.notifications_outlined,
+                    activeIcon: Icons.notifications_rounded,
+                    label: 'Reminders'),
+                _navItem(
+                    index: 3,
+                    icon: Icons.person_outline_rounded,
+                    activeIcon: Icons.person_rounded,
+                    label: 'Profile'),
               ],
             ),
           ),
@@ -116,9 +133,9 @@ class _HomeTab extends StatefulWidget {
 class _HomeTabState extends State<_HomeTab> {
   final _supabase = Supabase.instance.client;
 
-  String _name      = '';
-  String _username  = '';
-  bool   _isLoading = true;
+  String _name = '';
+  String _username = '';
+  bool _isLoading = true;
 
   // ── CONTESTS FROM BACKEND ─────────────────────
   List<Map<String, dynamic>> _contests = [];
@@ -136,14 +153,11 @@ class _HomeTabState extends State<_HomeTab> {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
-      final data = await _supabase
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .single();
+      final data =
+          await _supabase.from('profiles').select().eq('id', userId).single();
       setState(() {
-        _name      = data['name']     ?? '';
-        _username  = data['username'] ?? '';
+        _name = data['name'] ?? '';
+        _username = data['username'] ?? '';
         _isLoading = false;
       });
     } catch (e) {
@@ -156,9 +170,9 @@ class _HomeTabState extends State<_HomeTab> {
     try {
       final res = await http.get(Uri.parse('$_backendUrl/contests'));
       if (res.statusCode == 200) {
-        final data   = jsonDecode(res.body);
-        final all    = List<Map<String, dynamic>>.from(data['contests'] ?? []);
-        final now    = DateTime.now().toUtc();
+        final data = jsonDecode(res.body);
+        final all = List<Map<String, dynamic>>.from(data['contests'] ?? []);
+        final now = DateTime.now().toUtc();
 
         // ── AUTO REMOVE past contests ─────────────
         final upcoming = all.where((c) {
@@ -174,7 +188,7 @@ class _HomeTabState extends State<_HomeTab> {
         });
 
         setState(() {
-          _contests        = upcoming.take(5).toList(); // show max 5 in preview
+          _contests = upcoming.take(5).toList(); // show max 5 in preview
           _contestsLoading = false;
         });
       }
@@ -199,8 +213,7 @@ class _HomeTabState extends State<_HomeTab> {
           ),
           backgroundColor: Colors.black,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           action: SnackBarAction(
             label: 'UNDO',
             textColor: Colors.white70,
@@ -216,19 +229,27 @@ class _HomeTabState extends State<_HomeTab> {
   // ── PLATFORM CONFIG ───────────────────────────
   Color _platformColor(String platform) {
     switch (platform.toLowerCase()) {
-      case 'codeforces': return const Color(0xFF1A73E8);
-      case 'codechef':   return const Color(0xFF5B4638);
-      case 'atcoder':    return const Color(0xFF222222);
-      default:           return Colors.black54;
+      case 'codeforces':
+        return const Color(0xFF1A73E8);
+      case 'codechef':
+        return const Color(0xFF5B4638);
+      case 'atcoder':
+        return const Color(0xFF222222);
+      default:
+        return Colors.black54;
     }
   }
 
   String _platformBadge(String platform) {
     switch (platform.toLowerCase()) {
-      case 'codeforces': return 'CF';
-      case 'codechef':   return 'CC';
-      case 'atcoder':    return 'AT';
-      default:           return 'OT';
+      case 'codeforces':
+        return 'CF';
+      case 'codechef':
+        return 'CC';
+      case 'atcoder':
+        return 'AT';
+      default:
+        return 'OT';
     }
   }
 
@@ -237,8 +258,8 @@ class _HomeTabState extends State<_HomeTab> {
     final start = DateTime.tryParse(startTimeStr)?.toLocal();
     if (start == null) return '';
     final diff = start.difference(DateTime.now());
-    if (diff.inDays > 0)    return 'In ${diff.inDays}d ${diff.inHours % 24}h';
-    if (diff.inHours > 0)   return 'In ${diff.inHours}h ${diff.inMinutes % 60}m';
+    if (diff.inDays > 0) return 'In ${diff.inDays}d ${diff.inHours % 24}h';
+    if (diff.inHours > 0) return 'In ${diff.inHours}h ${diff.inMinutes % 60}m';
     if (diff.inMinutes > 0) return 'In ${diff.inMinutes}m';
     return 'Starting!';
   }
@@ -247,7 +268,7 @@ class _HomeTabState extends State<_HomeTab> {
     final start = DateTime.tryParse(startTimeStr)?.toLocal();
     if (start == null) return Colors.green;
     final diff = start.difference(DateTime.now());
-    if (diff.inHours < 1)  return Colors.redAccent;
+    if (diff.inHours < 1) return Colors.redAccent;
     if (diff.inHours < 24) return Colors.orange;
     return Colors.green;
   }
@@ -268,7 +289,6 @@ class _HomeTabState extends State<_HomeTab> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     const SizedBox(height: 32),
 
                     // ── TOP BAR ─────────────────────────────
@@ -408,8 +428,8 @@ class _HomeTabState extends State<_HomeTab> {
                             : Column(
                                 children: _contests
                                     .map((c) => Padding(
-                                          padding: const EdgeInsets.only(
-                                              bottom: 12),
+                                          padding:
+                                              const EdgeInsets.only(bottom: 12),
                                           child: _contestCard(c),
                                         ))
                                     .toList(),
@@ -428,8 +448,7 @@ class _HomeTabState extends State<_HomeTab> {
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         decoration: BoxDecoration(
-                          border: Border.all(
-                              color: Colors.black, width: 1.2),
+                          border: Border.all(color: Colors.black, width: 1.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Row(
@@ -467,16 +486,13 @@ class _HomeTabState extends State<_HomeTab> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    _platformCard('CODEFORCES', 'CF',
-                        const Color(0xFF1A73E8),
+                    _platformCard('CODEFORCES', 'CF', const Color(0xFF1A73E8),
                         'Track your CF rating & problems'),
                     const SizedBox(height: 14),
-                    _platformCard('CODECHEF', 'CC',
-                        const Color(0xFF5B4638),
+                    _platformCard('CODECHEF', 'CC', const Color(0xFF5B4638),
                         'Track your CC rating & contests'),
                     const SizedBox(height: 14),
-                    _platformCard('ATCODER', 'AT',
-                        const Color(0xFF222222),
+                    _platformCard('ATCODER', 'AT', const Color(0xFF222222),
                         'Track your AT rating & problems'),
 
                     const SizedBox(height: 48),
@@ -524,15 +540,27 @@ class _HomeTabState extends State<_HomeTab> {
 
   // ── CONTEST CARD WITH COMPLETED BUTTON ────────
   Widget _contestCard(Map<String, dynamic> c) {
-    final platform  = c['platform'] as String? ?? 'Other';
-    final color     = _platformColor(platform);
-    final badge     = _platformBadge(platform);
-    final timeLeft  = _timeUntil(c['start_time'] ?? '');
-    final urgency   = _urgencyColor(c['start_time'] ?? '');
+    final platform = c['platform'] as String? ?? 'Other';
+    final color = _platformColor(platform);
+    final badge = _platformBadge(platform);
+    final timeLeft = _timeUntil(c['start_time'] ?? '');
+    final urgency = _urgencyColor(c['start_time'] ?? '');
     final startTime = DateTime.tryParse(c['start_time'] ?? '')?.toLocal();
 
-    final months = ['Jan','Feb','Mar','Apr','May','Jun',
-                    'Jul','Aug','Sep','Oct','Nov','Dec'];
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
     final dateStr = startTime != null
         ? '${startTime.day} ${months[startTime.month - 1]}'
         : '';
@@ -554,15 +582,14 @@ class _HomeTabState extends State<_HomeTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             // ── ROW 1: Platform + date + time left ──
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 // Platform badge
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(20),
@@ -582,8 +609,8 @@ class _HomeTabState extends State<_HomeTab> {
                     // Date
                     Text(
                       dateStr,
-                      style: const TextStyle(
-                          fontSize: 11, color: Colors.black38),
+                      style:
+                          const TextStyle(fontSize: 11, color: Colors.black38),
                     ),
                     const SizedBox(width: 8),
                     // Time left badge
@@ -631,8 +658,8 @@ class _HomeTabState extends State<_HomeTab> {
               children: [
                 // Platform badge
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(6),
@@ -651,13 +678,13 @@ class _HomeTabState extends State<_HomeTab> {
                 GestureDetector(
                   onTap: () => _markCompleted(c),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 7),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
                       color: Colors.green.shade50,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: Colors.green.shade200, width: 1),
+                      border:
+                          Border.all(color: Colors.green.shade200, width: 1),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -696,17 +723,14 @@ class _HomeTabState extends State<_HomeTab> {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: color.withOpacity(0.12),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(badge,
                 style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: color)),
+                    fontSize: 12, fontWeight: FontWeight.w800, color: color)),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -720,13 +744,12 @@ class _HomeTabState extends State<_HomeTab> {
                         letterSpacing: 1.5)),
                 const SizedBox(height: 3),
                 Text(subtitle,
-                    style: const TextStyle(
-                        fontSize: 11, color: Colors.black38)),
+                    style:
+                        const TextStyle(fontSize: 11, color: Colors.black38)),
               ],
             ),
           ),
-          const Icon(Icons.arrow_forward_ios,
-              size: 13, color: Colors.black26),
+          const Icon(Icons.arrow_forward_ios, size: 13, color: Colors.black26),
         ],
       ),
     );

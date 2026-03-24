@@ -1136,7 +1136,7 @@ class _ContestReminderPageState extends State<ContestReminderPage>
             Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.black45)),
           ])),
-          Switch(value: value, onChanged: onChanged, activeColor: Colors.black),
+          Switch(value: value, onChanged: onChanged, activeThumbColor: Colors.black),
         ]),
       );
 }
