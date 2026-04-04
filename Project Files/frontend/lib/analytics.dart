@@ -99,7 +99,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
   }
 
   void _simulateProgress() {
-    bool _cancelled = false;
+    bool cancelled = false;
     final steps = [
       [0.10, 'Looking up handle...'],
       [0.20, 'Fetching similar rated users...'],
