@@ -21,6 +21,7 @@ class NotificationService {
 
   static Future<void> init() async {
     tz_data.initializeTimeZones();
+    tz.setLocalLocation(tz.getLocation('Asia/Dhaka'));
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
@@ -29,8 +30,7 @@ class NotificationService {
       requestSoundPermission: true,
     );
     await _plugin.initialize(
-      const InitializationSettings(
-          android: androidSettings, iOS: iosSettings),
+      const InitializationSettings(android: androidSettings, iOS: iosSettings),
     );
   }
 
@@ -87,7 +87,7 @@ class NotificationService {
 // ─────────────────────────────────────────────
 class _PlatformConfig {
   final String badge;
-  final Color  color;
+  final Color color;
   final String contestsUrl;
   const _PlatformConfig({
     required this.badge,
@@ -98,19 +98,23 @@ class _PlatformConfig {
 
 const Map<String, _PlatformConfig> _platformMap = {
   'Codeforces': _PlatformConfig(
-    badge: 'CF', color: Color(0xFF1A73E8),
+    badge: 'CF',
+    color: Color(0xFF1A73E8),
     contestsUrl: 'https://codeforces.com/contests',
   ),
   'Codechef': _PlatformConfig(
-    badge: 'CC', color: Color(0xFF5B4638),
+    badge: 'CC',
+    color: Color(0xFF5B4638),
     contestsUrl: 'https://www.codechef.com/contests',
   ),
   'Atcoder': _PlatformConfig(
-    badge: 'AT', color: Color(0xFF222222),
+    badge: 'AT',
+    color: Color(0xFF222222),
     contestsUrl: 'https://atcoder.jp/contests',
   ),
   'Other': _PlatformConfig(
-    badge: 'OT', color: Color(0xFF888888),
+    badge: 'OT',
+    color: Color(0xFF888888),
     contestsUrl: 'https://google.com',
   ),
 };
@@ -127,34 +131,28 @@ class ContestReminderPage extends StatefulWidget {
 
 class _ContestReminderPageState extends State<ContestReminderPage>
     with SingleTickerProviderStateMixin {
-
   late TabController _tabController;
   final _supabase = Supabase.instance.client;
 
-  // ── UPCOMING CONTESTS ─────────────────────────
-  List<Map<String, dynamic>> _allContests      = [];
+  List<Map<String, dynamic>> _allContests = [];
   List<Map<String, dynamic>> _filteredContests = [];
   bool _upcomingLoading = true;
 
-  // ── FILTER ────────────────────────────────────
   String _selectedFilter = 'All';
   final List<String> _filters = ['All', 'Codeforces', 'Codechef', 'Atcoder'];
 
-  // ── REMINDERS SET (contest cf_id → reminder id) ──
   final Map<String, int> _setReminders = {};
 
-  // ── CUSTOM REMINDERS ──────────────────────────
   List<Map<String, dynamic>> _reminders = [];
   bool _remindersLoading = true;
 
-  // ── ADD FORM ──────────────────────────────────
   final _titleController = TextEditingController();
-  final _linkController  = TextEditingController();
+  final _linkController = TextEditingController();
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
-  bool _remind10Min        = true;
-  bool _remind24Hr         = true;
-  bool _isSaving           = false;
+  bool _remind10Min = true;
+  bool _remind24Hr = true;
+  bool _isSaving = false;
   String _selectedPlatform = 'Codeforces';
   final List<String> _platforms = ['Codeforces', 'Codechef', 'Atcoder', 'Other'];
 
@@ -174,15 +172,14 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     super.dispose();
   }
 
-  // ── LOAD UPCOMING ─────────────────────────────
   Future<void> _loadUpcomingContests() async {
     setState(() => _upcomingLoading = true);
     try {
       final res = await http.get(Uri.parse('$_backendUrl/contests'));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        final all  = List<Map<String, dynamic>>.from(data['contests'] ?? []);
-        final now  = DateTime.now().toUtc();
+        final all = List<Map<String, dynamic>>.from(data['contests'] ?? []);
+        final now = DateTime.now().toUtc();
         final upcoming = all.where((c) {
           final start = DateTime.tryParse(c['start_time'] ?? '');
           return start != null && start.isAfter(now);
@@ -190,8 +187,8 @@ class _ContestReminderPageState extends State<ContestReminderPage>
         upcoming.sort((a, b) => DateTime.parse(a['start_time'])
             .compareTo(DateTime.parse(b['start_time'])));
         setState(() {
-          _allContests      = upcoming;
-          _upcomingLoading  = false;
+          _allContests = upcoming;
+          _upcomingLoading = false;
         });
         _applyFilter(_selectedFilter);
       }
@@ -200,7 +197,6 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     }
   }
 
-  // ── APPLY FILTER ──────────────────────────────
   void _applyFilter(String filter) {
     setState(() {
       _selectedFilter = filter;
@@ -214,7 +210,6 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     });
   }
 
-  // ── LOAD CUSTOM REMINDERS ─────────────────────
   Future<void> _loadReminders() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -225,9 +220,8 @@ class _ContestReminderPageState extends State<ContestReminderPage>
           .eq('user_id', userId)
           .order('contest_time', ascending: true);
       setState(() {
-        _reminders        = List<Map<String, dynamic>>.from(data);
+        _reminders = List<Map<String, dynamic>>.from(data);
         _remindersLoading = false;
-        // track which upcoming contests already have reminders
         for (final r in _reminders) {
           final cfId = r['cf_id'] as String? ?? '';
           if (cfId.isNotEmpty) _setReminders[cfId] = r['id'] as int;
@@ -238,12 +232,11 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     }
   }
 
-  // ── SET REMINDER FROM UPCOMING ────────────────
   Future<void> _setReminderFromUpcoming(Map<String, dynamic> contest) async {
-    final cfId    = contest['cf_id']?.toString() ?? contest['id']?.toString() ?? '';
-    final name    = contest['name'] as String? ?? '';
+    final cfId = contest['cf_id']?.toString() ?? contest['id']?.toString() ?? '';
+    final name = contest['name'] as String? ?? '';
     final platform = contest['platform'] as String? ?? 'Other';
-    final url     = contest['url'] as String? ?? '';
+    final url = contest['url'] as String? ?? '';
     final startStr = contest['start_time'] as String? ?? '';
     final contestTime = DateTime.tryParse(startStr)?.toLocal();
 
@@ -252,7 +245,6 @@ class _ContestReminderPageState extends State<ContestReminderPage>
       return;
     }
 
-    // already set — cancel it
     if (_setReminders.containsKey(cfId)) {
       final remId = _setReminders[cfId]!;
       await _supabase.from('contest_reminders').delete().eq('id', remId);
@@ -264,42 +256,39 @@ class _ContestReminderPageState extends State<ContestReminderPage>
       return;
     }
 
-    // save to Supabase
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
       final result = await _supabase.from('contest_reminders').insert({
-        'user_id':      userId,
-        'title':        name,
-        'platform':     platform,
+        'user_id': userId,
+        'title': name,
+        'platform': platform,
         'contest_time': contestTime.toIso8601String(),
         'remind_10min': true,
-        'remind_24hr':  true,
-        'link':         url,
-        'cf_id':        cfId,
+        'remind_24hr': true,
+        'link': url,
+        'cf_id': cfId,
       }).select().single();
 
       final int remId = result['id'] as int;
 
-      // schedule 10min notification
       final t10 = contestTime.subtract(const Duration(minutes: 10));
       if (t10.isAfter(DateTime.now())) {
         await NotificationService.scheduleNotification(
-          id:            remId * 10,
-          title:         '⚡ Contest in 10 minutes!',
-          body:          '$name on $platform starts soon!',
+          id: remId * 10,
+          title: '⚡ Contest in 10 minutes!',
+          body: '$name on $platform starts soon!',
           scheduledTime: t10,
         );
       }
 
-      // schedule 24h notification
       final t24 = contestTime.subtract(const Duration(hours: 24));
       if (t24.isAfter(DateTime.now())) {
         await NotificationService.scheduleNotification(
-          id:            remId * 10 + 1,
-          title:         '📅 Contest tomorrow!',
-          body:          '$name on $platform is in 24 hours.',
+          id: remId * 10 + 1,
+          title: '📅 Contest tomorrow!',
+          body: '$name on $platform is in 24 hours.',
           scheduledTime: t24,
         );
       }
@@ -312,7 +301,6 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     }
   }
 
-  // ── OPEN URL ──────────────────────────────────
   Future<void> _openUrl(String url) async {
     if (url.isEmpty) return;
     final uri = Uri.parse(url);
@@ -321,13 +309,12 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     }
   }
 
-  // ── TIME UNTIL ────────────────────────────────
   String _timeUntil(String startStr) {
     final start = DateTime.tryParse(startStr)?.toLocal();
     if (start == null) return '';
     final diff = start.difference(DateTime.now());
-    if (diff.inDays > 0)    return 'In ${diff.inDays}d ${diff.inHours % 24}h';
-    if (diff.inHours > 0)   return 'In ${diff.inHours}h ${diff.inMinutes % 60}m';
+    if (diff.inDays > 0) return 'In ${diff.inDays}d ${diff.inHours % 24}h';
+    if (diff.inHours > 0) return 'In ${diff.inHours}h ${diff.inMinutes % 60}m';
     if (diff.inMinutes > 0) return 'In ${diff.inMinutes}m';
     return 'Starting!';
   }
@@ -336,7 +323,7 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     final start = DateTime.tryParse(startStr)?.toLocal();
     if (start == null) return Colors.green;
     final diff = start.difference(DateTime.now());
-    if (diff.inHours < 1)  return Colors.redAccent;
+    if (diff.inHours < 1) return Colors.redAccent;
     if (diff.inHours < 24) return Colors.orange;
     return Colors.green;
   }
@@ -344,9 +331,8 @@ class _ContestReminderPageState extends State<ContestReminderPage>
   Color _platformColor(String p) => _platformMap[p]?.color ?? Colors.black54;
   String _platformBadge(String p) => _platformMap[p]?.badge ?? 'OT';
 
-  // ── PICK DATE / TIME ──────────────────────────
   Future<void> _pickDate() async {
-    final now  = DateTime.now();
+    final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
       initialDate: now,
@@ -374,7 +360,6 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     if (time != null) setState(() => _selectedTime = time);
   }
 
-  // ── SAVE CUSTOM REMINDER ──────────────────────
   Future<void> _saveReminder() async {
     if (_titleController.text.trim().isEmpty) {
       _showSnack('Enter a contest name');
@@ -390,22 +375,25 @@ class _ContestReminderPageState extends State<ContestReminderPage>
       if (userId == null) return;
 
       final contestTime = DateTime(
-        _selectedDate!.year, _selectedDate!.month, _selectedDate!.day,
-        _selectedTime!.hour, _selectedTime!.minute,
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        _selectedTime!.hour,
+        _selectedTime!.minute,
       );
       final config = _platformMap[_selectedPlatform]!;
-      final link   = _linkController.text.trim().isNotEmpty
+      final link = _linkController.text.trim().isNotEmpty
           ? _linkController.text.trim()
           : config.contestsUrl;
 
       final result = await _supabase.from('contest_reminders').insert({
-        'user_id':      userId,
-        'title':        _titleController.text.trim(),
-        'platform':     _selectedPlatform,
+        'user_id': userId,
+        'title': _titleController.text.trim(),
+        'platform': _selectedPlatform,
         'contest_time': contestTime.toIso8601String(),
         'remind_10min': _remind10Min,
-        'remind_24hr':  _remind24Hr,
-        'link':         link,
+        'remind_24hr': _remind24Hr,
+        'link': link,
       }).select().single();
 
       final int remId = result['id'] as int;
@@ -436,11 +424,11 @@ class _ContestReminderPageState extends State<ContestReminderPage>
       _titleController.clear();
       _linkController.clear();
       setState(() {
-        _selectedDate     = null;
-        _selectedTime     = null;
+        _selectedDate = null;
+        _selectedTime = null;
         _selectedPlatform = 'Codeforces';
-        _remind10Min      = true;
-        _remind24Hr       = true;
+        _remind10Min = true;
+        _remind24Hr = true;
       });
 
       await _loadReminders();
@@ -453,7 +441,6 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     }
   }
 
-  // ── DELETE REMINDER ───────────────────────────
   Future<void> _deleteReminder(Map<String, dynamic> reminder) async {
     try {
       await _supabase.from('contest_reminders').delete().eq('id', reminder['id']);
@@ -477,7 +464,6 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     ));
   }
 
-  // ── ADD CUSTOM REMINDER SHEET ─────────────────
   void _openAddSheet() {
     showModalBottomSheet(
       context: context,
@@ -507,24 +493,28 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                   ],
                 ),
                 const SizedBox(height: 24),
-
                 _sheetLabel('CONTEST NAME'),
                 const SizedBox(height: 8),
-                TextField(controller: _titleController, style: const TextStyle(fontSize: 15),
+                TextField(
+                    controller: _titleController,
+                    style: const TextStyle(fontSize: 15),
                     decoration: _sheetInputDecoration('e.g. Codeforces Round 999')),
                 const SizedBox(height: 20),
-
                 _sheetLabel('PLATFORM'),
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(color: const Color(0xFFF2F2F2), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFF2F2F2),
+                      borderRadius: BorderRadius.circular(8)),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: _selectedPlatform,
                       isExpanded: true,
                       icon: const Icon(Icons.keyboard_arrow_down, color: Colors.black54),
-                      items: _platforms.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                      items: _platforms
+                          .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                          .toList(),
                       onChanged: (val) {
                         if (val != null) {
                           setState(() => _selectedPlatform = val);
@@ -535,30 +525,35 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                   ),
                 ),
                 const SizedBox(height: 20),
-
                 _sheetLabel('CONTEST LINK (OPTIONAL)'),
                 const SizedBox(height: 8),
-                TextField(controller: _linkController, keyboardType: TextInputType.url,
+                TextField(
+                    controller: _linkController,
+                    keyboardType: TextInputType.url,
                     style: const TextStyle(fontSize: 15),
                     decoration: _sheetInputDecoration('https://codeforces.com/contest/...')),
                 const SizedBox(height: 20),
-
                 Row(children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     _sheetLabel('DATE'),
                     const SizedBox(height: 8),
                     GestureDetector(
                       onTap: () async { await _pickDate(); setSheetState(() {}); },
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        decoration: BoxDecoration(color: const Color(0xFFF2F2F2), borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(
+                            color: const Color(0xFFF2F2F2),
+                            borderRadius: BorderRadius.circular(8)),
                         child: Row(children: [
                           const Icon(Icons.calendar_today, size: 14, color: Colors.black54),
                           const SizedBox(width: 8),
                           Text(
-                            _selectedDate == null ? 'Pick date'
+                            _selectedDate == null
+                                ? 'Pick date'
                                 : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
-                            style: TextStyle(fontSize: 13,
+                            style: TextStyle(
+                                fontSize: 13,
                                 color: _selectedDate == null ? Colors.black38 : Colors.black),
                           ),
                         ]),
@@ -566,20 +561,24 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                     ),
                   ])),
                   const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     _sheetLabel('TIME'),
                     const SizedBox(height: 8),
                     GestureDetector(
                       onTap: () async { await _pickTime(); setSheetState(() {}); },
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        decoration: BoxDecoration(color: const Color(0xFFF2F2F2), borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(
+                            color: const Color(0xFFF2F2F2),
+                            borderRadius: BorderRadius.circular(8)),
                         child: Row(children: [
                           const Icon(Icons.access_time, size: 14, color: Colors.black54),
                           const SizedBox(width: 8),
                           Text(
                             _selectedTime == null ? 'Pick time' : _selectedTime!.format(context),
-                            style: TextStyle(fontSize: 13,
+                            style: TextStyle(
+                                fontSize: 13,
                                 color: _selectedTime == null ? Colors.black38 : Colors.black),
                           ),
                         ]),
@@ -588,30 +587,42 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                   ])),
                 ]),
                 const SizedBox(height: 20),
-
                 _sheetLabel('NOTIFICATIONS'),
                 const SizedBox(height: 12),
-                _notifToggle(label: '24 hours before', subtitle: 'Reminder the day before',
-                    icon: Icons.notifications_outlined, value: _remind24Hr,
-                    onChanged: (val) { setState(() => _remind24Hr = val); setSheetState(() => _remind24Hr = val); }),
+                _notifToggle(
+                    label: '24 hours before',
+                    subtitle: 'Reminder the day before',
+                    icon: Icons.notifications_outlined,
+                    value: _remind24Hr,
+                    onChanged: (val) {
+                      setState(() => _remind24Hr = val);
+                      setSheetState(() => _remind24Hr = val);
+                    }),
                 const SizedBox(height: 8),
-                _notifToggle(label: '10 minutes before', subtitle: 'Last-minute reminder',
-                    icon: Icons.alarm, value: _remind10Min,
-                    onChanged: (val) { setState(() => _remind10Min = val); setSheetState(() => _remind10Min = val); }),
+                _notifToggle(
+                    label: '10 minutes before',
+                    subtitle: 'Last-minute reminder',
+                    icon: Icons.alarm,
+                    value: _remind10Min,
+                    onChanged: (val) {
+                      setState(() => _remind10Min = val);
+                      setSheetState(() => _remind10Min = val);
+                    }),
                 const SizedBox(height: 28),
-
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: _isSaving ? null : _saveReminder,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black, foregroundColor: Colors.white,
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 18),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       elevation: 0,
                     ),
                     child: _isSaving
-                        ? const SizedBox(height: 18, width: 18,
+                        ? const SizedBox(
+                            height: 18, width: 18,
                             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : const Text('SAVE REMINDER',
                             style: TextStyle(fontSize: 12, letterSpacing: 2.5, fontWeight: FontWeight.w700)),
@@ -632,18 +643,18 @@ class _ContestReminderPageState extends State<ContestReminderPage>
       body: SafeArea(
         child: Column(
           children: [
-
-            // ── TOP BAR ───────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(32, 32, 32, 0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('CONTESTS',
-                      style: TextStyle(fontSize: 11, letterSpacing: 3.5,
-                          fontWeight: FontWeight.w700, color: Colors.black)),
+                      style: TextStyle(
+                          fontSize: 11,
+                          letterSpacing: 3.5,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black)),
                   Row(children: [
-                    // Test notification button
                     GestureDetector(
                       onTap: () async {
                         await NotificationService.testNotification();
@@ -659,7 +670,6 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Add custom reminder
                     GestureDetector(
                       onTap: _openAddSheet,
                       child: Container(
@@ -671,8 +681,12 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                           children: [
                             Icon(Icons.add, color: Colors.white, size: 14),
                             SizedBox(width: 6),
-                            Text('ADD', style: TextStyle(fontSize: 10, letterSpacing: 1.5,
-                                fontWeight: FontWeight.w700, color: Colors.white)),
+                            Text('ADD',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    letterSpacing: 1.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white)),
                           ],
                         ),
                       ),
@@ -681,10 +695,7 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
-
-            // ── TAB BAR ───────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Container(
@@ -719,7 +730,10 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                               ),
                               child: Text(
                                 '${_reminders.length}',
-                                style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.w700),
+                                style: const TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700),
                               ),
                             ),
                           ],
@@ -730,10 +744,7 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
-
-            // ── TAB VIEWS ─────────────────────────
             Expanded(
               child: TabBarView(
                 controller: _tabController,
@@ -749,12 +760,9 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     );
   }
 
-  // ── UPCOMING TAB ──────────────────────────────
   Widget _upcomingTab() {
     return Column(
       children: [
-
-        // ── FILTER CHIPS ──────────────────────────
         SizedBox(
           height: 36,
           child: ListView.separated(
@@ -763,12 +771,12 @@ class _ContestReminderPageState extends State<ContestReminderPage>
             itemCount: _filters.length,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
-              final f        = _filters[i];
+              final f = _filters[i];
               final isActive = _selectedFilter == f;
               Color chipColor = Colors.black;
               if (f == 'Codeforces') chipColor = const Color(0xFF1A73E8);
-              if (f == 'Codechef')   chipColor = const Color(0xFF5B4638);
-              if (f == 'Atcoder')    chipColor = const Color(0xFF222222);
+              if (f == 'Codechef') chipColor = const Color(0xFF5B4638);
+              if (f == 'Atcoder') chipColor = const Color(0xFF222222);
 
               return GestureDetector(
                 onTap: () => _applyFilter(f),
@@ -795,10 +803,7 @@ class _ContestReminderPageState extends State<ContestReminderPage>
             },
           ),
         ),
-
         const SizedBox(height: 12),
-
-        // ── CONTEST LIST ──────────────────────────
         Expanded(
           child: _upcomingLoading
               ? const Center(child: CircularProgressIndicator(color: Colors.black))
@@ -808,12 +813,17 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                         const Icon(Icons.event_busy, size: 48, color: Colors.black26),
                         const SizedBox(height: 16),
                         const Text('No contests found',
-                            style: TextStyle(fontSize: 18, fontFamily: 'Georgia', color: Colors.black45)),
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontFamily: 'Georgia',
+                                color: Colors.black45)),
                         const SizedBox(height: 8),
                         GestureDetector(
                           onTap: _loadUpcomingContests,
                           child: const Text('Pull to refresh',
-                              style: TextStyle(fontSize: 12, color: Colors.black38,
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black38,
                                   decoration: TextDecoration.underline)),
                         ),
                       ]),
@@ -833,22 +843,21 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     );
   }
 
-  // ── UPCOMING CARD ─────────────────────────────
   Widget _upcomingCard(Map<String, dynamic> c) {
     final platform = c['platform'] as String? ?? 'Other';
-    final color    = _platformColor(platform);
-    final badge    = _platformBadge(platform);
+    final color = _platformColor(platform);
+    final badge = _platformBadge(platform);
     final timeLeft = _timeUntil(c['start_time'] ?? '');
-    final urgency  = _urgencyColor(c['start_time'] ?? '');
-    final url      = c['url'] as String? ?? _platformMap[platform]?.contestsUrl ?? '';
-    final cfId     = c['cf_id']?.toString() ?? c['id']?.toString() ?? '';
+    final urgency = _urgencyColor(c['start_time'] ?? '');
+    final url = c['url'] as String? ?? _platformMap[platform]?.contestsUrl ?? '';
+    final cfId = c['cf_id']?.toString() ?? c['id']?.toString() ?? '';
     final hasReminder = _setReminders.containsKey(cfId);
 
     final startTime = DateTime.tryParse(c['start_time'] ?? '')?.toLocal();
-    final months    = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    final dateStr   = startTime != null ? '${startTime.day} ${months[startTime.month-1]}' : '';
-    final timeStr   = startTime != null
-        ? '${startTime.hour.toString().padLeft(2,'0')}:${startTime.minute.toString().padLeft(2,'0')}'
+    final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final dateStr = startTime != null ? '${startTime.day} ${months[startTime.month - 1]}' : '';
+    final timeStr = startTime != null
+        ? '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}'
         : '';
 
     return Container(
@@ -856,61 +865,64 @@ class _ContestReminderPageState extends State<ContestReminderPage>
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: hasReminder ? Border.all(color: Colors.black, width: 1.5) : null,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
-            // Platform + time left
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                      color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+                      color: color.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(20)),
                   child: Text(platform,
                       style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                      color: urgency.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                      color: urgency.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6)),
                   child: Text(timeLeft,
                       style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: urgency)),
                 ),
               ],
             ),
-
             const SizedBox(height: 10),
-
-            // Contest name — tap to open
             GestureDetector(
               onTap: () => _openUrl(url),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(c['name'] as String? ?? '',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
-                            color: Colors.black, height: 1.3)),
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black,
+                            height: 1.3)),
                   ),
                   const Icon(Icons.open_in_new, size: 14, color: Colors.black26),
                 ],
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // Bottom row: badge + date + alarm + register
             Row(
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                      color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
+                      color: color.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6)),
                   child: Text(badge,
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color)),
                 ),
@@ -918,8 +930,6 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                 Text('$dateStr  $timeStr',
                     style: const TextStyle(fontSize: 11, color: Colors.black38)),
                 const Spacer(),
-
-                // ── ALARM BUTTON ──────────────────
                 GestureDetector(
                   onTap: () => _setReminderFromUpcoming(c),
                   child: AnimatedContainer(
@@ -953,10 +963,7 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 8),
-
-                // REGISTER button
                 GestureDetector(
                   onTap: () => _openUrl(url),
                   child: Container(
@@ -964,8 +971,11 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                     decoration: BoxDecoration(
                         color: color, borderRadius: BorderRadius.circular(8)),
                     child: const Text('REGISTER',
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
-                            color: Colors.white, letterSpacing: 1.0)),
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 1.0)),
                   ),
                 ),
               ],
@@ -976,7 +986,6 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     );
   }
 
-  // ── MY REMINDERS TAB ─────────────────────────
   Widget _remindersTab() {
     if (_remindersLoading) {
       return const Center(child: CircularProgressIndicator(color: Colors.black));
@@ -1002,21 +1011,25 @@ class _ContestReminderPageState extends State<ContestReminderPage>
     );
   }
 
-  // ── REMINDER CARD ─────────────────────────────
   Widget _reminderCard(Map<String, dynamic> reminder) {
     final contestTime = DateTime.parse(reminder['contest_time'] as String).toLocal();
-    final isPast      = contestTime.isBefore(DateTime.now());
-    final platform    = reminder['platform'] as String? ?? 'Other';
-    final link        = reminder['link'] as String? ?? '';
-    final config      = _platformMap[platform] ?? _platformMap['Other']!;
-    final months      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final isPast = contestTime.isBefore(DateTime.now());
+    final platform = reminder['platform'] as String? ?? 'Other';
+    final link = reminder['link'] as String? ?? '';
+    final config = _platformMap[platform] ?? _platformMap['Other']!;
+    final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isPast ? Colors.white.withOpacity(0.6) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1027,14 +1040,16 @@ class _ContestReminderPageState extends State<ContestReminderPage>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                    color: config.color.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+                    color: config.color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20)),
                 child: Text(platform,
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: config.color)),
+                    style: TextStyle(
+                        fontSize: 10, fontWeight: FontWeight.w700, color: config.color)),
               ),
               Row(children: [
                 Text(
-                  '${contestTime.day} ${months[contestTime.month-1]}  '
-                  '${contestTime.hour.toString().padLeft(2,'0')}:${contestTime.minute.toString().padLeft(2,'0')}',
+                  '${contestTime.day} ${months[contestTime.month - 1]}  '
+                  '${contestTime.hour.toString().padLeft(2, '0')}:${contestTime.minute.toString().padLeft(2, '0')}',
                   style: const TextStyle(fontSize: 11, color: Colors.black38),
                 ),
                 const SizedBox(width: 8),
@@ -1043,16 +1058,15 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                        color: Colors.red.shade50, borderRadius: BorderRadius.circular(6)),
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(6)),
                     child: Icon(Icons.delete_outline, size: 14, color: Colors.red.shade400),
                   ),
                 ),
               ]),
             ],
           ),
-
           const SizedBox(height: 10),
-
           GestureDetector(
             onTap: () => _openUrl(link.isNotEmpty ? link : config.contestsUrl),
             child: Row(
@@ -1060,7 +1074,9 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                 Expanded(
                   child: Text(
                     reminder['title'] as String? ?? '',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                         color: isPast ? Colors.black38 : Colors.black),
                   ),
                 ),
@@ -1068,16 +1084,16 @@ class _ContestReminderPageState extends State<ContestReminderPage>
               ],
             ),
           ),
-
           const SizedBox(height: 10),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(children: [
                 if (reminder['remind_24hr'] == true) _notifBadge('🔔 24h', isPast),
                 if (reminder['remind_10min'] == true) ...[
-                  const SizedBox(width: 6), _notifBadge('⚡ 10m', isPast)],
+                  const SizedBox(width: 6),
+                  _notifBadge('⚡ 10m', isPast)
+                ],
                 if (isPast) ...[const SizedBox(width: 6), _notifBadge('PAST', true)],
               ]),
               GestureDetector(
@@ -1087,8 +1103,11 @@ class _ContestReminderPageState extends State<ContestReminderPage>
                   decoration: BoxDecoration(
                       color: config.color, borderRadius: BorderRadius.circular(8)),
                   child: const Text('REGISTER',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
-                          color: Colors.white, letterSpacing: 1.0)),
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 1.0)),
                 ),
               ),
             ],
@@ -1105,34 +1124,48 @@ class _ContestReminderPageState extends State<ContestReminderPage>
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(label,
-            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
                 color: isPast ? Colors.black26 : Colors.black54)),
       );
 
   Widget _sheetLabel(String label) => Text(label,
-      style: const TextStyle(fontSize: 10, letterSpacing: 2.5,
-          fontWeight: FontWeight.w600, color: Colors.black54));
+      style: const TextStyle(
+          fontSize: 10,
+          letterSpacing: 2.5,
+          fontWeight: FontWeight.w600,
+          color: Colors.black54));
 
   InputDecoration _sheetInputDecoration(String hint) => InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: Colors.black26),
-        filled: true, fillColor: const Color(0xFFF2F2F2),
+        filled: true,
+        fillColor: const Color(0xFFF2F2F2),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
             borderSide: const BorderSide(color: Colors.black, width: 1.2)),
       );
 
   Widget _notifToggle({
-    required String label, required String subtitle,
-    required IconData icon, required bool value, required ValueChanged<bool> onChanged,
-  }) => Container(
+    required String label,
+    required String subtitle,
+    required IconData icon,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) =>
+      Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(color: const Color(0xFFF2F2F2), borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(
+            color: const Color(0xFFF2F2F2), borderRadius: BorderRadius.circular(8)),
         child: Row(children: [
           Icon(icon, size: 18, color: Colors.black54),
           const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.black45)),
           ])),

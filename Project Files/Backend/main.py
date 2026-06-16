@@ -33,7 +33,6 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ─────────────────────────────────────────────
 #  FIREBASE ADMIN INIT
-#  📌 Download serviceAccountKey.json from:
 #  Firebase Console → Project Settings → Service Accounts → Generate Key
 # ─────────────────────────────────────────────
 cred = credentials.Certificate("serviceAccountKey.json")
